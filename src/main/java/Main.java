@@ -5,6 +5,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -13,6 +14,7 @@ public class Main {
 	public static void main(String[] args){
 		System.out.println("Logs from your program will appear here!");
 		int port = 6379;
+		HashMap<String, String> storage = new HashMap<>();
 		try {
 			Selector selector = Selector.open();
 			ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -29,7 +31,7 @@ public class Main {
 					if (key.isAcceptable()){
 						handleAccept(serverChannel, selector);
 					} else if(key.isReadable()){
-						handleRead(key);
+						handleRead(key, storage);
 					}
 					
 				}
@@ -39,15 +41,13 @@ public class Main {
 		}
 	}
 
-	//accept client connections and register socket with selector
 	private static void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
 		SocketChannel clientChannel = serverChannel.accept();
 		clientChannel.configureBlocking(false);
 		clientChannel.register(selector, SelectionKey.OP_READ);
 	}
 
-	//read incoming data from client
-	private static void handleRead(SelectionKey key) throws IOException{
+	private static void handleRead(SelectionKey key, HashMap<String, String> storage) throws IOException{
 		SocketChannel clientChannel = (SocketChannel) key.channel();
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
         int bytesRead = clientChannel.read(buffer);
@@ -58,16 +58,38 @@ public class Main {
 
 		buffer.flip();
 		List<String> command = RespParser.parse(buffer);
+		
+		String cmd = command.get(0);
+		String response;
+		switch(cmd){
+			case "ECHO":
+				String msg = command.get(1);
+				response = "$"+msg.length()+"\r\n"+msg+"\r\n";
+				clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+				break;
 
-		if (command.get(0).equalsIgnoreCase("ECHO")){
-			String msg = command.get(1);
-			String response = "$"+msg.length()+"\r\n"+msg+"\r\n";
-			clientChannel.write(ByteBuffer.wrap(response.getBytes()));
-		}
+			case "PING":
+				response = "+PONG\r\n";
+				clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+				break;
 
-		else if(command.get(0).equalsIgnoreCase("PING")){
-			String response = "+PONG\r\n";
-			clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+			case "GET":
+				String value = storage.getOrDefault(command.get(1), null);
+				String resp;
+				if (value != null) {
+					resp = "$"+value.length()+"\r\n"+value+"\r\n";
+				}else{
+					resp = "$-1\r\n";
+				}
+				clientChannel.write(ByteBuffer.wrap(resp.getBytes()));
+				break;
+
+			case "SET":
+				storage.put(command.get(1), command.get(2));
+				clientChannel.write(ByteBuffer.wrap(("+OK\r\n").getBytes()));
+				break;
+			default:
+				break;
 		}
 	}
 }
