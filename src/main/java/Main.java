@@ -1,41 +1,60 @@
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+import java.util.Set;
 
 public class Main {
-  public static void main(String[] args){
-    System.out.println("Logs from your program will appear here!");
-       ServerSocket serverSocket = null;
-       Socket clientSocket = null;
-       int port = 6379;
-       	try {
-         serverSocket = new ServerSocket(port);
-         // Since the tester restarts your program quite often, setting SO_REUSEADDR
-         // ensures that we don't run into 'Address already in use' errors
-         serverSocket.setReuseAddress(true);
-         // Wait for connection from client.
-         clientSocket = serverSocket.accept();
-		 InputStream ip = clientSocket.getInputStream();
-         OutputStream op = clientSocket.getOutputStream();
-		 byte[] buffer = new byte[1024];
-         while (true){
-          	int bytesread = ip.read(buffer);
-			if (bytesread==-1) return;
-			String response ="+PONG\r\n";
-          	op.write(response.getBytes());
+	public static void main(String[] args){
+		System.out.println("Logs from your program will appear here!");
+		int port = 6379;
+		try {
+			Selector selector = Selector.open();
+			ServerSocketChannel serverChannel = ServerSocketChannel.open();
+			serverChannel.bind(new InetSocketAddress(port));
+			serverChannel.configureBlocking(false);
+			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+			while (true){
+			selector.select();
+			Set<SelectionKey> selectedKeys = selector.selectedKeys();
+			Iterator<SelectionKey> iterate = selectedKeys.iterator();
+			while (iterate.hasNext()) {
+				SelectionKey key =  iterate.next();
+				iterate.remove();
+				if (key.isAcceptable()){
+					handleAccept(serverChannel, selector);
+				} else if(key.isReadable()){
+					handleRead(key);
+				}
+				
+			}
 		}
 		} catch (IOException e) {
-         	System.out.println("IOException: " + e.getMessage());
-       	} finally {
-        try {
-        	if (clientSocket != null) {
-            	clientSocket.close();
-           }
-         } catch (IOException e) {
-        		System.out.println("IOException: " + e.getMessage());
-         }
-       }
-  }
+			System.out.println("IOException: " + e.getMessage());
+		}
+	}
+
+	private static void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
+		SocketChannel clientChannel = serverChannel.accept();
+		clientChannel.configureBlocking(false);
+		clientChannel.register(selector, SelectionKey.OP_READ);
+	}
+
+	private static void handleRead(SelectionKey key) throws IOException{
+		SocketChannel clientChannel = (SocketChannel) key.channel();
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int bytesRead = clientChannel.read(buffer);
+
+		if (bytesRead == -1){
+			clientChannel.close();
+		}
+
+		buffer.flip();
+		String response = "+PONG\r\n";
+		clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+	}
 }
