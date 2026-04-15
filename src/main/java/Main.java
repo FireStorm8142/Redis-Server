@@ -5,10 +5,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Main {
 	public static void main(String[] args){
@@ -16,6 +13,7 @@ public class Main {
 		int port = 6379;
 		HashMap<String, String> storage = new HashMap<>();
 		HashMap<String, Long> expiry = new HashMap<>();
+		HashMap<String, List<String>> listStorage = new HashMap<>();
 		try {
 			Selector selector = Selector.open();
 			ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -32,7 +30,7 @@ public class Main {
 					if (key.isAcceptable()){
 						handleAccept(serverChannel, selector);
 					} else if(key.isReadable()){
-						handleRead(key, storage, expiry);
+						handleRead(key, storage, expiry, listStorage);
 					}
 				}
 			}
@@ -47,7 +45,7 @@ public class Main {
 		clientChannel.register(selector, SelectionKey.OP_READ);
 	}
 
-	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry) throws IOException{
+	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage) throws IOException{
 		SocketChannel clientChannel = (SocketChannel) key.channel();
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
         int bytesRead = clientChannel.read(buffer);
@@ -60,50 +58,7 @@ public class Main {
 		buffer.flip();
 		List<String> command = RespParser.parse(buffer);
 
-		String cmd = command.get(0).toUpperCase();
-		String response;
-		switch(cmd){
-			case "ECHO":
-				String msg = command.get(1);
-				response = "$"+msg.length()+"\r\n"+msg+"\r\n";
-				clientChannel.write(ByteBuffer.wrap(response.getBytes()));
-				break;
-
-			case "PING":
-				response = "+PONG\r\n";
-				clientChannel.write(ByteBuffer.wrap(response.getBytes()));
-				break;
-
-			case "GET":
-				long now = System.currentTimeMillis();
-				if (expiry.getOrDefault(command.get(1), Long.MAX_VALUE) < now){
-						expiry.remove(command.get(1));
-						storage.remove(command.get(1));
-				}
-				String value = storage.getOrDefault(command.get(1), null);
-				String resp;
-				if (value != null) {
-					resp = "$"+value.length()+"\r\n"+value+"\r\n";
-				}else{
-					resp = "$-1\r\n";
-				}
-				clientChannel.write(ByteBuffer.wrap(resp.getBytes()));
-				break;
-
-			case "SET":
-				if (command.size() > 3){
-					if (command.get(3).equalsIgnoreCase("PX")) {
-						expiry.put(command.get(1), System.currentTimeMillis() + Long.parseLong(command.get(4)));
-					}
-					else{
-						expiry.put(command.get(1), System.currentTimeMillis() + Long.parseLong(command.get(4))*1000);
-					}
-				}
-				storage.put(command.get(1), command.get(2));
-				clientChannel.write(ByteBuffer.wrap(("+OK\r\n").getBytes()));
-				break;
-			default:
-				break;
-		}
+		String response = HandleCommand.handleCommand(command, storage, expiry, listStorage);
+		clientChannel.write(ByteBuffer.wrap(response.getBytes()));
 	}
 }
