@@ -7,6 +7,7 @@ public class HandleCommand {
     public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage) {
         String cmd = command.get(0).toUpperCase();
         String response;
+        StringBuilder sb;
         switch(cmd) {
             case "ECHO":
                 String msg = command.get(1);
@@ -53,6 +54,22 @@ public class HandleCommand {
 
                 int size = list.size();
                 response = ":"+size+"\r\n";
+                break;
+
+            case "LRANGE":
+                List<String> array = listStorage.getOrDefault(command.get(1), null);
+                if (array == null) response = "*0\r\n";
+                else {
+                    int start=Integer.parseInt(command.get(2));
+                    int end=Integer.parseInt(command.get(3));
+                    List<String> temp = array.subList(start,(end >= array.size()) ? array.size() : end+1);
+                    sb = new StringBuilder();
+                    sb.append("*").append(temp.size()).append("\r\n");
+                    for (String s : temp) {
+                        sb.append("$").append(s.length()).append("\r\n").append(s).append("\r\n");
+                    }
+                    response=sb.toString();
+                }
                 break;
 
             default:
