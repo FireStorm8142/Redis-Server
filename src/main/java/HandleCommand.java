@@ -78,6 +78,16 @@ public class HandleCommand {
                 }
                 break;
 
+            case "LPUSH":
+                List<String> list2 = listStorage.getOrDefault(command.get(1), null);
+                if (list2 == null) list2 = new ArrayList<>();
+                for (int i = 2; i<command.size(); i++){
+                    list2.add(0, command.get(i));
+                }
+                listStorage.put(command.get(1), list2);
+                response = ":"+list2.size()+"\r\n";
+                break;
+
             default:
                 response=null;
                 break;
