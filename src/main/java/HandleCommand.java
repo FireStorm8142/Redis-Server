@@ -61,8 +61,14 @@ public class HandleCommand {
                 if (array == null) response = "*0\r\n";
                 else {
                     int start=Integer.parseInt(command.get(2));
+                    start = Math.max((start >= 0 ? start : array.size()+start), 0);
                     int end=Integer.parseInt(command.get(3));
-                    List<String> temp = array.subList(start,(end >= array.size()) ? array.size() : end+1);
+                    end = Math.min((end >= 0 ? end : array.size()+end), array.size()-1);
+                    if (start > end){
+                        response = "*0\r\n";
+                        break;
+                    }
+                    List<String> temp = array.subList(start, end+1);
                     sb = new StringBuilder();
                     sb.append("*").append(temp.size()).append("\r\n");
                     for (String s : temp) {
