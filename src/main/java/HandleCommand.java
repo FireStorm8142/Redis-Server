@@ -88,6 +88,12 @@ public class HandleCommand {
                 response = ":"+list2.size()+"\r\n";
                 break;
 
+            case "LLEN":
+                List<String> list3 = listStorage.getOrDefault(command.get(1), null);
+                if (list3 == null) response = ":0\r\n";
+                else response = ":"+list3.size()+"\r\n";
+                break;
+
             default:
                 response=null;
                 break;
