@@ -94,6 +94,15 @@ public class HandleCommand {
                 else response = ":"+list3.size()+"\r\n";
                 break;
 
+            case "LPOP":
+                List<String> list4  = listStorage.getOrDefault(command.get(1), null);
+                if (list4 == null) response = ":0\r\n";
+                else{
+                    String element = list4.remove(0);
+                    response="$"+element.length()+"\r\n"+element+"\r\n";
+                    break;
+                }
+
             default:
                 response=null;
                 break;
@@ -101,4 +110,3 @@ public class HandleCommand {
         return response;
     }
 }
-
