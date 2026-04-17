@@ -96,12 +96,35 @@ public class HandleCommand {
 
             case "LPOP":
                 List<String> list4  = listStorage.getOrDefault(command.get(1), null);
-                if (list4 == null) response = ":0\r\n";
+                if (list4 == null) response = "$-1\r\n";
                 else{
+                    if (command.size() > 2){
+                        int temp = Integer.parseInt(command.get(2));
+                        sb = new StringBuilder();
+
+                        sb.append("*").append(Math.min(temp, list4.size())).append("\r\n");
+                        if (temp >= list4.size()){
+                            while(!list4.isEmpty()){
+                                String element = list4.remove(0);
+                                sb.append("$").append(element.length()).append("\r\n").append(element).append("\r\n");
+                            }
+                            response = sb.toString();
+                            break;
+                        }
+
+                        while (temp > 0){
+                            String element = list4.remove(0);
+                            sb.append("$").append(element.length()).append("\r\n").append(element).append("\r\n");
+                            temp--;
+                        }
+                        response = sb.toString();
+                        break;
+                    }
+
                     String element = list4.remove(0);
                     response="$"+element.length()+"\r\n"+element+"\r\n";
-                    break;
                 }
+                break;
 
             default:
                 response=null;
