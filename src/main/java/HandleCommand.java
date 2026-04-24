@@ -5,9 +5,9 @@ import java.util.*;
 
 public class HandleCommand {
 
-    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<SocketChannel>> waitingClients, SocketChannel clientChannel) throws IOException {
-        String cmd = command.get(0).toUpperCase();
-        String response;
+    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients, SocketChannel clientChannel) throws IOException {
+        String cmd = command.getFirst().toUpperCase();
+        String response = null;
         StringBuilder sb;
         switch(cmd) {
             case "ECHO":
@@ -46,23 +46,28 @@ public class HandleCommand {
                 break;
 
             case "RPUSH":
+                boolean served = false;
                 List<String> list = listStorage.getOrDefault(command.get(1), null);
-                Queue<SocketChannel> queue = waitingClients.getOrDefault(command.get(1), null);
-                if (queue != null && !queue.isEmpty()) {
-                    SocketChannel client = queue.poll();
-                    String key = command.get(1);
-                    String value1 = command.get(2);
-                    response = "*2\r\n"+"$"+key.length()+"\r\n"+key+"\r\n"+"$"+value1.length()+"\r\n"+value1+"\r\n";
-                    client.write(ByteBuffer.wrap(response.getBytes()));
-                    if (list == null) list = new ArrayList<>();
-                    for (int i =3; i<command.size(); i++){
-                        list.add(command.get(i));
+                Queue<WaitingClients> queue = waitingClients.getOrDefault(command.get(1), null);
+                while (queue != null && !queue.isEmpty()) {
+                    WaitingClients wc = queue.poll();
+                    if (wc.expiry > System.currentTimeMillis()) {
+                        String key = command.get(1);
+                        String value1 = command.get(2);
+                        response = "*2\r\n"+"$"+key.length()+"\r\n"+key+"\r\n"+"$"+value1.length()+"\r\n"+value1+"\r\n";
+                        wc.client.write(ByteBuffer.wrap(response.getBytes()));
+                        if (list == null) list = new ArrayList<>();
+                        for (int i = 3; i < command.size(); i++) {
+                            list.add(command.get(i));
+                        }
+                        listStorage.put(command.get(1), list);
+                        int size = list.size() + 1;
+                        response = ":"+size+"\r\n";
+                        served = true;
+                        break;
                     }
-                    listStorage.put(command.get(1), list);
-                    int size = list.size()+1;
-                    response = ":"+size+"\r\n";
                 }
-                else {
+                if (!served) {
                     if (list == null) list = new ArrayList<>();
                     for (int i = 2; i < command.size(); i++) {
                         list.add(command.get(i));
@@ -147,25 +152,23 @@ public class HandleCommand {
                 List<String> list5  = listStorage.getOrDefault(command.get(1), null);
 
                 if (list5 == null || list5.isEmpty()) {
-                    Queue<SocketChannel> queue1 = waitingClients.get(command.get(1));
+                    Queue<WaitingClients> queue1 = waitingClients.get(command.get(1));
                     if (queue1 == null) {
                         queue1 = new ArrayDeque<>();
                         waitingClients.put(command.get(1), queue1);
                     }
-                    queue1.add(clientChannel);
+                    double timeout = Double.parseDouble(command.get(2));
+                    queue1.add(new WaitingClients(clientChannel, timeout));
                 }
                 else{
                     String element = list5.removeFirst();
-                    int size = element.length();
-                    response = "*2\r\n"+"$"+command.get(1).length()+"\r\n"+command.get(1)+"\r\n"+"$"+size+"\r\n"+element+"\r\n";
+                    int size1 = element.length();
+                    response = "*2\r\n"+"$"+command.get(1).length()+"\r\n"+command.get(1)+"\r\n"+"$"+size1+"\r\n"+element+"\r\n";
                     break;
                 }
-
-                response = null;
                 break;
 
             default:
-                response=null;
                 break;
         }
         return response;

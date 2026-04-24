@@ -14,7 +14,7 @@ public class Main {
 		HashMap<String, String> storage = new HashMap<>();
 		HashMap<String, Long> expiry = new HashMap<>();
 		HashMap<String, List<String>> listStorage = new HashMap<>();
-		HashMap<String, Queue<SocketChannel>> waitingClients = new HashMap<>();
+		HashMap<String, Queue<WaitingClients>> waitingClients = new HashMap<>();
 		try {
 			Selector selector = Selector.open();
 			ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -22,7 +22,19 @@ public class Main {
 			serverChannel.configureBlocking(false);
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 			while (true){
-				selector.select();
+				selector.select(100);
+
+				//checks for expired clients every cycle and removes them
+				long now = System.currentTimeMillis();
+				for (Queue<WaitingClients> queue : waitingClients.values()) {
+					while (queue != null && !queue.isEmpty()) {
+						WaitingClients wc = queue.peek();
+						if (wc.expiry == Long.MAX_VALUE || wc.expiry > now) break;
+						queue.poll();
+						wc.client.write(ByteBuffer.wrap("*-1\r\n".getBytes()));
+					}
+				}
+
 				Set<SelectionKey> selectedKeys = selector.selectedKeys();
 				Iterator<SelectionKey> iterate = selectedKeys.iterator();
 				while (iterate.hasNext()) {
@@ -46,7 +58,7 @@ public class Main {
 		clientChannel.register(selector, SelectionKey.OP_READ);
 	}
 
-	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<SocketChannel>> waitingClients) throws IOException{
+	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients) throws IOException{
 		SocketChannel clientChannel = (SocketChannel) key.channel();
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		int bytesRead = clientChannel.read(buffer);
