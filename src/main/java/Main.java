@@ -14,6 +14,7 @@ public class Main {
 		HashMap<String, String> storage = new HashMap<>();
 		HashMap<String, Long> expiry = new HashMap<>();
 		HashMap<String, List<String>> listStorage = new HashMap<>();
+		HashMap<String, Queue<SocketChannel>> waitingClients = new HashMap<>();
 		try {
 			Selector selector = Selector.open();
 			ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -30,7 +31,7 @@ public class Main {
 					if (key.isAcceptable()){
 						handleAccept(serverChannel, selector);
 					} else if(key.isReadable()){
-						handleRead(key, storage, expiry, listStorage);
+						handleRead(key, storage, expiry, listStorage, waitingClients);
 					}
 				}
 			}
@@ -45,10 +46,10 @@ public class Main {
 		clientChannel.register(selector, SelectionKey.OP_READ);
 	}
 
-	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage) throws IOException{
+	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<SocketChannel>> waitingClients) throws IOException{
 		SocketChannel clientChannel = (SocketChannel) key.channel();
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
-        int bytesRead = clientChannel.read(buffer);
+		int bytesRead = clientChannel.read(buffer);
 
 		if (bytesRead == -1){
 			clientChannel.close();
@@ -58,7 +59,9 @@ public class Main {
 		buffer.flip();
 		List<String> command = RespParser.parse(buffer);
 
-		String response = HandleCommand.handleCommand(command, storage, expiry, listStorage);
-		clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+		String response = HandleCommand.handleCommand(command, storage, expiry, listStorage, waitingClients, clientChannel);
+		if (response != null){
+			clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+		}
 	}
 }

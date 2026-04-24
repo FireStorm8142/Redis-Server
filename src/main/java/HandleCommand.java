@@ -1,17 +1,18 @@
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
+import java.util.*;
 
 public class HandleCommand {
 
-    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage) {
+    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<SocketChannel>> waitingClients, SocketChannel clientChannel) throws IOException {
         String cmd = command.get(0).toUpperCase();
         String response;
         StringBuilder sb;
         switch(cmd) {
             case "ECHO":
                 String msg = command.get(1);
-                response = "$" + msg.length() + "\r\n" + msg + "\r\n";
+                response = "$"+msg.length()+"\r\n"+msg+"\r\n";
                 break;
 
             case "PING":
@@ -26,7 +27,7 @@ public class HandleCommand {
                 }
                 String value = storage.getOrDefault(command.get(1), null);
                 if (value != null) {
-                    response = "$" + value.length() + "\r\n" + value + "\r\n";
+                    response = "$"+value.length()+"\r\n"+value+"\r\n";
                 } else {
                     response = "$-1\r\n";
                 }
@@ -46,14 +47,31 @@ public class HandleCommand {
 
             case "RPUSH":
                 List<String> list = listStorage.getOrDefault(command.get(1), null);
-                if (list == null) list = new ArrayList<>();
-                for (int i =2; i<command.size(); i++){
-                    list.add(command.get(i));
+                Queue<SocketChannel> queue = waitingClients.getOrDefault(command.get(1), null);
+                if (queue != null && !queue.isEmpty()) {
+                    SocketChannel client = queue.poll();
+                    String key = command.get(1);
+                    String value1 = command.get(2);
+                    response = "*2\r\n"+"$"+key.length()+"\r\n"+key+"\r\n"+"$"+value1.length()+"\r\n"+value1+"\r\n";
+                    client.write(ByteBuffer.wrap(response.getBytes()));
+                    if (list == null) list = new ArrayList<>();
+                    for (int i =3; i<command.size(); i++){
+                        list.add(command.get(i));
+                    }
+                    listStorage.put(command.get(1), list);
+                    int size = list.size()+1;
+                    response = ":"+size+"\r\n";
                 }
-                listStorage.put(command.get(1), list);
+                else {
+                    if (list == null) list = new ArrayList<>();
+                    for (int i = 2; i < command.size(); i++) {
+                        list.add(command.get(i));
+                    }
+                    listStorage.put(command.get(1), list);
 
-                int size = list.size();
-                response = ":"+size+"\r\n";
+                    int size = list.size();
+                    response = ":" + size + "\r\n";
+                }
                 break;
 
             case "LRANGE":
@@ -77,12 +95,11 @@ public class HandleCommand {
                     response=sb.toString();
                 }
                 break;
-
             case "LPUSH":
                 List<String> list2 = listStorage.getOrDefault(command.get(1), null);
                 if (list2 == null) list2 = new ArrayList<>();
                 for (int i = 2; i<command.size(); i++){
-                    list2.add(0, command.get(i));
+                    list2.addFirst(command.get(i));
                 }
                 listStorage.put(command.get(1), list2);
                 response = ":"+list2.size()+"\r\n";
@@ -105,7 +122,7 @@ public class HandleCommand {
                         sb.append("*").append(Math.min(temp, list4.size())).append("\r\n");
                         if (temp >= list4.size()){
                             while(!list4.isEmpty()){
-                                String element = list4.remove(0);
+                                String element = list4.removeFirst();
                                 sb.append("$").append(element.length()).append("\r\n").append(element).append("\r\n");
                             }
                             response = sb.toString();
@@ -113,7 +130,7 @@ public class HandleCommand {
                         }
 
                         while (temp > 0){
-                            String element = list4.remove(0);
+                            String element = list4.removeFirst();
                             sb.append("$").append(element.length()).append("\r\n").append(element).append("\r\n");
                             temp--;
                         }
@@ -121,9 +138,30 @@ public class HandleCommand {
                         break;
                     }
 
-                    String element = list4.remove(0);
+                    String element = list4.removeFirst();
                     response="$"+element.length()+"\r\n"+element+"\r\n";
                 }
+                break;
+
+            case "BLPOP":
+                List<String> list5  = listStorage.getOrDefault(command.get(1), null);
+
+                if (list5 == null || list5.isEmpty()) {
+                    Queue<SocketChannel> queue1 = waitingClients.get(command.get(1));
+                    if (queue1 == null) {
+                        queue1 = new ArrayDeque<>();
+                        waitingClients.put(command.get(1), queue1);
+                    }
+                    queue1.add(clientChannel);
+                }
+                else{
+                    String element = list5.removeFirst();
+                    int size = element.length();
+                    response = "*2\r\n"+"$"+command.get(1).length()+"\r\n"+command.get(1)+"\r\n"+"$"+size+"\r\n"+element+"\r\n";
+                    break;
+                }
+
+                response = null;
                 break;
 
             default:
