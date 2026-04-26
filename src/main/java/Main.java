@@ -9,8 +9,13 @@ import java.util.*;
 
 public class Main {
 	public static void main(String[] args){
-		System.out.println("Logs from your program will appear here!");
 		int port = 6379;
+		for (int i=0; i<args.length; i++) {
+			if (args[i].equals("--port")) {
+				if (i+1 < args.length) port = Integer.parseInt(args[i+1]);
+				break;
+			}
+		}
 		HashMap<String, String> storage = new HashMap<>();
 		HashMap<String, Long> expiry = new HashMap<>();
 		HashMap<String, List<String>> listStorage = new HashMap<>();
