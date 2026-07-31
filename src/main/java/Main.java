@@ -5,17 +5,27 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.security.SecureRandom;
 import java.util.*;
 
 public class Main {
+	private static String role = "master";
 	public static void main(String[] args){
 		int port = 6379;
 		for (int i=0; i<args.length; i++) {
-			if (args[i].equals("--port")) {
-				if (i+1 < args.length) port = Integer.parseInt(args[i+1]);
-				break;
+			if (args[i].equals("--port")) if (i+1 < args.length) {
+				port = Integer.parseInt(args[i+1]);
+				i++;
 			}
+			else if (args[i].equals("--replicaof")) role = "slave";
 		}
+		//Create server state
+		SecureRandom random = new SecureRandom();
+		byte[] bytes = new byte[20];
+		random.nextBytes(bytes);
+		String uuid = HexFormat.of().formatHex(bytes);
+		Replication server = new Replication(role, uuid, "0");
+
 		HashMap<String, String> storage = new HashMap<>();
 		HashMap<String, Long> expiry = new HashMap<>();
 		HashMap<String, List<String>> listStorage = new HashMap<>();
@@ -48,7 +58,7 @@ public class Main {
 					if (key.isAcceptable()){
 						handleAccept(serverChannel, selector);
 					} else if(key.isReadable()){
-						handleRead(key, storage, expiry, listStorage, waitingClients);
+						handleRead(key, storage, expiry, listStorage, waitingClients, server);
 					}
 				}
 			}
@@ -63,7 +73,7 @@ public class Main {
 		clientChannel.register(selector, SelectionKey.OP_READ);
 	}
 
-	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients) throws IOException{
+	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients, Replication server) throws IOException{
 		SocketChannel clientChannel = (SocketChannel) key.channel();
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		int bytesRead = clientChannel.read(buffer);
@@ -76,7 +86,7 @@ public class Main {
 		buffer.flip();
 		List<String> command = RespParser.parse(buffer);
 
-		String response = HandleCommand.handleCommand(command, storage, expiry, listStorage, waitingClients, clientChannel);
+		String response = HandleCommand.handleCommand(command, storage, expiry, listStorage, waitingClients, clientChannel, server);
 		if (response != null){
 			clientChannel.write(ByteBuffer.wrap(response.getBytes()));
 		}

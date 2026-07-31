@@ -5,7 +5,7 @@ import java.util.*;
 
 public class HandleCommand {
 
-    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients, SocketChannel clientChannel) throws IOException {
+    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients, SocketChannel clientChannel, Replication server) throws IOException {
         String cmd = command.getFirst().toUpperCase();
         String response = null;
         StringBuilder sb;
@@ -169,7 +169,7 @@ public class HandleCommand {
                 break;
 
             case "INFO":
-                if (command.get(1).equalsIgnoreCase("replication")) response = "$"+Replication.getReplInfo().length()+"\r\n"+Replication.getReplInfo()+"\r\n";
+                if (command.get(1).equalsIgnoreCase("replication")) response = "$"+server.getReplInfo().length()+"\r\n"+server.getReplInfo()+"\r\n";
                 break;
 
             default:
