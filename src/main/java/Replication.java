@@ -13,6 +13,6 @@ public class Replication {
     public String getReplInfo(){
         return "role:" + role + "\r\n" +
                 "master_replid:" + master_replid + "\r\n" +
-                "master_repl_offset:" + master_repl_offset;
+                "master_repl_offset:" + master_repl_offset + "\r\n";
     }
 }

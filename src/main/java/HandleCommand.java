@@ -10,6 +10,12 @@ public class HandleCommand {
         String response = null;
         StringBuilder sb;
         switch(cmd) {
+            //temporary handler for redis-cli, it expects the server send a bulk string,
+            //else the cli sits in a loop doing nothing.
+            case "COMMAND":
+                response = "*0\r\n";
+                break;
+
             case "ECHO":
                 String msg = command.get(1);
                 response = "$"+msg.length()+"\r\n"+msg+"\r\n";

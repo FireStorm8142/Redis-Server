@@ -13,9 +13,11 @@ public class Main {
 	public static void main(String[] args){
 		int port = 6379;
 		for (int i=0; i<args.length; i++) {
-			if (args[i].equals("--port")) if (i+1 < args.length) {
-				port = Integer.parseInt(args[i+1]);
-				i++;
+			if (args[i].equals("--port")) {
+				if (i+1 < args.length) {
+					port = Integer.parseInt(args[i + 1]);
+					i++;
+				}
 			}
 			else if (args[i].equals("--replicaof")) role = "slave";
 		}
@@ -25,6 +27,7 @@ public class Main {
 		random.nextBytes(bytes);
 		String uuid = HexFormat.of().formatHex(bytes);
 		Replication server = new Replication(role, uuid, "0");
+		System.out.println("Server running on port : " + port);
 
 		HashMap<String, String> storage = new HashMap<>();
 		HashMap<String, Long> expiry = new HashMap<>();
