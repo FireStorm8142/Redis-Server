@@ -168,6 +168,10 @@ public class HandleCommand {
                 }
                 break;
 
+            case "INFO":
+                if (command.get(1).equalsIgnoreCase("replication")) response = "$"+Replication.getReplInfo().length()+"\r\n"+Replication.getReplInfo()+"\r\n";
+                break;
+
             default:
                 break;
         }
