@@ -10,7 +10,11 @@ import java.util.*;
 
 public class Main {
 	private static String role = "master";
+	private static String masterHost;
+	private static int masterPort;
+
 	public static void main(String[] args){
+		//Server Bootstrapping
 		int port = 6379;
 		for (int i=0; i<args.length; i++) {
 			if (args[i].equals("--port")) {
@@ -19,14 +23,19 @@ public class Main {
 					i++;
 				}
 			}
-			else if (args[i].equals("--replicaof")) role = "slave";
+			else if (args[i].equals("--replicaof")) {
+				role = "slave";
+				masterHost = args[i+1];
+				masterPort = Integer.parseInt(args[i+2]);
+				i+=2;
+			}
 		}
 		//Create server state
 		SecureRandom random = new SecureRandom();
 		byte[] bytes = new byte[20];
 		random.nextBytes(bytes);
 		String uuid = HexFormat.of().formatHex(bytes);
-		Replication server = new Replication(role, uuid, "0");
+		Replication server = new Replication(role, uuid, "0", masterHost, masterPort);
 		System.out.println("Server running on port : " + port);
 
 		HashMap<String, String> storage = new HashMap<>();
