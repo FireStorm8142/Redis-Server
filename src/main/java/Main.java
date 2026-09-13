@@ -19,7 +19,7 @@ public class Main {
 		for (int i=0; i<args.length; i++) {
 			if (args[i].equals("--port")) {
 				if (i+1 < args.length) {
-					port = Integer.parseInt(args[i + 1]);
+					port = Integer.parseInt(args[i+1]);
 					i++;
 				}
 			}
@@ -48,6 +48,8 @@ public class Main {
 			serverChannel.bind(new InetSocketAddress(port));
 			serverChannel.configureBlocking(false);
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+
+			if (role.equals("slave")) connectToMaster(server, selector);
 			while (true){
 				selector.select(100);
 
@@ -71,12 +73,22 @@ public class Main {
 						handleAccept(serverChannel, selector);
 					} else if(key.isReadable()){
 						handleRead(key, storage, expiry, listStorage, waitingClients, server);
+					} else if (key.isConnectable()) {
+						SocketChannel masterChannel = (SocketChannel) key.channel();
+						masterChannel.finishConnect();
 					}
 				}
 			}
 		} catch (IOException e) {
 			System.out.println("IOException: " + e.getMessage());
 		}
+	}
+
+	private static void connectToMaster(Replication server, Selector selector) throws IOException {
+		SocketChannel masterChannel = SocketChannel.open();
+		masterChannel.configureBlocking(false);
+		masterChannel.connect(new InetSocketAddress(server.master_host, server.master_port));
+		masterChannel.register(selector, SelectionKey.OP_CONNECT);
 	}
 
 	private static void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
