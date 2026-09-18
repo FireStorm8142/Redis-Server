@@ -5,7 +5,7 @@ import java.util.*;
 
 public class HandleCommand {
 
-    public static String handleCommand(List<String> command, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients, SocketChannel clientChannel, Replication server) throws IOException {
+    public static String handleCommand(List<String> command, SocketChannel clientChannel, Server server) throws IOException {
         String cmd = command.getFirst().toUpperCase();
         String response = null;
         StringBuilder sb;
@@ -17,7 +17,7 @@ public class HandleCommand {
                 break;
 
             case "ECHO":
-                String msg = command.get(1);
+                String msg = command.size() > 1 ? command.get(1) : "";
                 response = "$"+msg.length()+"\r\n"+msg+"\r\n";
                 break;
 
@@ -27,11 +27,11 @@ public class HandleCommand {
 
             case "GET":
                 long now = System.currentTimeMillis();
-                if (expiry.getOrDefault(command.get(1), Long.MAX_VALUE) < now) {
-                    expiry.remove(command.get(1));
-                    storage.remove(command.get(1));
+                if (server.getExpiry().getOrDefault(command.get(1), Long.MAX_VALUE) < now) {
+                    server.getExpiry().remove(command.get(1));
+                    server.getStorage().remove(command.get(1));
                 }
-                String value = storage.getOrDefault(command.get(1), null);
+                String value = server.getStorage().getOrDefault(command.get(1), null);
                 if (value != null) {
                     response = "$"+value.length()+"\r\n"+value+"\r\n";
                 } else {
@@ -42,19 +42,19 @@ public class HandleCommand {
             case "SET":
                 if (command.size() > 3) {
                     if (command.get(3).equalsIgnoreCase("PX")) {
-                        expiry.put(command.get(1), System.currentTimeMillis() + Long.parseLong(command.get(4)));
+                        server.getExpiry().put(command.get(1), System.currentTimeMillis() + Long.parseLong(command.get(4)));
                     } else {
-                        expiry.put(command.get(1), System.currentTimeMillis() + Long.parseLong(command.get(4)) * 1000);
+                        server.getExpiry().put(command.get(1), System.currentTimeMillis() + Long.parseLong(command.get(4)) * 1000);
                     }
                 }
-                storage.put(command.get(1), command.get(2));
+                server.getStorage().put(command.get(1), command.get(2));
                 response = "+OK\r\n";
                 break;
 
             case "RPUSH":
                 boolean served = false;
-                List<String> list = listStorage.getOrDefault(command.get(1), null);
-                Queue<WaitingClients> queue = waitingClients.getOrDefault(command.get(1), null);
+                List<String> list = server.getListStorage().getOrDefault(command.get(1), null);
+                Queue<WaitingClients> queue = server.getWaitingClients().getOrDefault(command.get(1), null);
                 while (queue != null && !queue.isEmpty()) {
                     WaitingClients wc = queue.poll();
                     if (wc.expiry > System.currentTimeMillis()) {
@@ -66,7 +66,7 @@ public class HandleCommand {
                         for (int i = 3; i < command.size(); i++) {
                             list.add(command.get(i));
                         }
-                        listStorage.put(command.get(1), list);
+                        server.getListStorage().put(command.get(1), list);
                         int size = list.size() + 1;
                         response = ":"+size+"\r\n";
                         served = true;
@@ -78,7 +78,7 @@ public class HandleCommand {
                     for (int i = 2; i < command.size(); i++) {
                         list.add(command.get(i));
                     }
-                    listStorage.put(command.get(1), list);
+                    server.getListStorage().put(command.get(1), list);
 
                     int size = list.size();
                     response = ":" + size + "\r\n";
@@ -86,7 +86,7 @@ public class HandleCommand {
                 break;
 
             case "LRANGE":
-                List<String> array = listStorage.getOrDefault(command.get(1), null);
+                List<String> array = server.getListStorage().getOrDefault(command.get(1), null);
                 if (array == null) response = "*0\r\n";
                 else {
                     int start=Integer.parseInt(command.get(2));
@@ -107,23 +107,23 @@ public class HandleCommand {
                 }
                 break;
             case "LPUSH":
-                List<String> list2 = listStorage.getOrDefault(command.get(1), null);
+                List<String> list2 = server.getListStorage().getOrDefault(command.get(1), null);
                 if (list2 == null) list2 = new ArrayList<>();
                 for (int i = 2; i<command.size(); i++){
                     list2.addFirst(command.get(i));
                 }
-                listStorage.put(command.get(1), list2);
+                server.getListStorage().put(command.get(1), list2);
                 response = ":"+list2.size()+"\r\n";
                 break;
 
             case "LLEN":
-                List<String> list3 = listStorage.getOrDefault(command.get(1), null);
+                List<String> list3 = server.getListStorage().getOrDefault(command.get(1), null);
                 if (list3 == null) response = ":0\r\n";
                 else response = ":"+list3.size()+"\r\n";
                 break;
 
             case "LPOP":
-                List<String> list4  = listStorage.getOrDefault(command.get(1), null);
+                List<String> list4  = server.getListStorage().getOrDefault(command.get(1), null);
                 if (list4 == null) response = "$-1\r\n";
                 else{
                     if (command.size() > 2){
@@ -155,13 +155,13 @@ public class HandleCommand {
                 break;
 
             case "BLPOP":
-                List<String> list5  = listStorage.getOrDefault(command.get(1), null);
+                List<String> list5  = server.getListStorage().getOrDefault(command.get(1), null);
 
                 if (list5 == null || list5.isEmpty()) {
-                    Queue<WaitingClients> queue1 = waitingClients.get(command.get(1));
+                    Queue<WaitingClients> queue1 = server.getWaitingClients().get(command.get(1));
                     if (queue1 == null) {
                         queue1 = new ArrayDeque<>();
-                        waitingClients.put(command.get(1), queue1);
+                        server.getWaitingClients().put(command.get(1), queue1);
                     }
                     double timeout = Double.parseDouble(command.get(2));
                     queue1.add(new WaitingClients(clientChannel, timeout));

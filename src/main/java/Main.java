@@ -35,13 +35,9 @@ public class Main {
 		byte[] bytes = new byte[20];
 		random.nextBytes(bytes);
 		String uuid = HexFormat.of().formatHex(bytes);
-		Replication server = new Replication(role, uuid, "0", masterHost, masterPort);
+		Server server = new Server(role, uuid, "0", masterHost, masterPort);
 		System.out.println("Server running on port : " + port);
 
-		HashMap<String, String> storage = new HashMap<>();
-		HashMap<String, Long> expiry = new HashMap<>();
-		HashMap<String, List<String>> listStorage = new HashMap<>();
-		HashMap<String, Queue<WaitingClients>> waitingClients = new HashMap<>();
 		try {
 			Selector selector = Selector.open();
 			ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -50,12 +46,13 @@ public class Main {
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
 			if (role.equals("slave")) connectToMaster(server, selector);
+
 			while (true){
 				selector.select(100);
 
 				//checks for expired clients every cycle and removes them
 				long now = System.currentTimeMillis();
-				for (Queue<WaitingClients> queue : waitingClients.values()) {
+				for (Queue<WaitingClients> queue : server.getWaitingClients().values()) {
 					while (queue != null && !queue.isEmpty()) {
 						WaitingClients wc = queue.peek();
 						if (wc.expiry == Long.MAX_VALUE || wc.expiry > now) break;
@@ -72,10 +69,9 @@ public class Main {
 					if (key.isAcceptable()){
 						handleAccept(serverChannel, selector);
 					} else if(key.isReadable()){
-						handleRead(key, storage, expiry, listStorage, waitingClients, server);
+						handleRead(key, server);
 					} else if (key.isConnectable()) {
-						SocketChannel masterChannel = (SocketChannel) key.channel();
-						masterChannel.finishConnect();
+						finishConnectToMaster(key);
 					}
 				}
 			}
@@ -84,11 +80,19 @@ public class Main {
 		}
 	}
 
-	private static void connectToMaster(Replication server, Selector selector) throws IOException {
+	private static void connectToMaster(Server server, Selector selector) throws IOException {
 		SocketChannel masterChannel = SocketChannel.open();
 		masterChannel.configureBlocking(false);
 		masterChannel.connect(new InetSocketAddress(server.master_host, server.master_port));
 		masterChannel.register(selector, SelectionKey.OP_CONNECT);
+	}
+
+	private static void finishConnectToMaster(SelectionKey key) throws IOException{
+		SocketChannel masterChannel = (SocketChannel) key.channel();
+		masterChannel.finishConnect();
+		String ping = "*1\r\n$4\r\nPING\r\n";
+		masterChannel.write(ByteBuffer.wrap(ping.getBytes()));
+		key.interestOps(SelectionKey.OP_READ);
 	}
 
 	private static void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
@@ -97,7 +101,7 @@ public class Main {
 		clientChannel.register(selector, SelectionKey.OP_READ);
 	}
 
-	private static void handleRead(SelectionKey key, HashMap<String, String> storage, HashMap<String, Long> expiry, HashMap<String, List<String>> listStorage, HashMap<String, Queue<WaitingClients>> waitingClients, Replication server) throws IOException{
+	private static void handleRead(SelectionKey key, Server server) throws IOException{
 		SocketChannel clientChannel = (SocketChannel) key.channel();
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		int bytesRead = clientChannel.read(buffer);
@@ -110,7 +114,7 @@ public class Main {
 		buffer.flip();
 		List<String> command = RespParser.parse(buffer);
 
-		String response = HandleCommand.handleCommand(command, storage, expiry, listStorage, waitingClients, clientChannel, server);
+		String response = HandleCommand.handleCommand(command, clientChannel, server);
 		if (response != null){
 			clientChannel.write(ByteBuffer.wrap(response.getBytes()));
 		}
