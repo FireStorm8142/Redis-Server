@@ -13,11 +13,13 @@ public class Replication {
 
     public Replication(String role) {
         if ("slave".equalsIgnoreCase(role)) stateSlave = ReplicationStateSlave.CONNECTING;
-        else stateMaster = ReplicationStateMaster.RECEIVING;
+        else stateMaster = ReplicationStateMaster.WAITING_FOR_REPLCONF;
     }
 
     enum ReplicationStateMaster {
-        RECEIVING
+        WAITING_FOR_REPLCONF,
+        WAITING_FOR_CAPA,
+        CONNECTED
     }
 
     enum ReplicationStateSlave {
@@ -28,7 +30,29 @@ public class Replication {
         WAITING_FOR_FULLRESYNC
     }
 
-    public void processResponse(SelectionKey key, List<String> command, Server server) throws IOException{
+    public void processRequest(SelectionKey key, List<String> command, Server server) throws IOException {
+        SocketChannel slaveChannel = (SocketChannel) key.channel();
+        switch(stateMaster) {
+            case WAITING_FOR_REPLCONF:
+                if ("replconf".equalsIgnoreCase(command.getFirst())) {
+                    String ok = "+OK\r\n";
+                    slaveChannel.write(ByteBuffer.wrap(ok.getBytes()));
+                    stateMaster = ReplicationStateMaster.WAITING_FOR_CAPA;
+                }
+
+            case WAITING_FOR_CAPA:
+                if ("replconf".equalsIgnoreCase(command.getFirst())) {
+                    String ok = "+OK\r\n";
+                    slaveChannel.write(ByteBuffer.wrap(ok.getBytes()));
+                    stateMaster = ReplicationStateMaster.CONNECTED;
+                    System.out.println("Slave connected");
+                }
+
+            default: break;
+        }
+    }
+
+    public void processResponse(SelectionKey key, List<String> command, Server server) throws IOException {
         SocketChannel masterChannel = (SocketChannel) key.channel();
         switch (stateSlave) {
             case WAITING_FOR_PONG:
@@ -51,6 +75,7 @@ public class Replication {
                     String psync = "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n";
                     masterChannel.write(ByteBuffer.wrap(psync.getBytes()));
                     stateSlave = ReplicationStateSlave.WAITING_FOR_FULLRESYNC;
+                    System.out.println("Master connected");
                 }
 
             default: break;

@@ -8,7 +8,12 @@ public class RespParser {
         List<String> result = new ArrayList<>();
 
         char prefix = (char) buffer.get();
-        if (prefix != '*') throw new RuntimeException("Invalid RESP: * expected");
+
+        if (prefix == '+') {
+            result.add(readSimple(buffer));
+            return result;
+        }
+        if (prefix != '*') throw new RuntimeException("Invalid RESP: * or + expected");
 
         int arg = readArg(buffer);
 
@@ -39,6 +44,20 @@ public class RespParser {
         }
 
         return Integer.parseInt(sb.toString());
+    }
+
+    public static String readSimple(ByteBuffer buffer) {
+        StringBuilder sb = new StringBuilder();
+
+        while (true) {
+            char c = (char) buffer.get();
+            if (c=='\r') {
+                buffer.get();
+                break;
+            }
+            sb.append(c);
+        }
+        return sb.toString();
     }
 }
 

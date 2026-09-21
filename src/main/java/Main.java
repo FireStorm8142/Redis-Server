@@ -49,7 +49,7 @@ public class Main {
 			if (role.equals("slave")) {
 				replication = new Replication("slave");
 				replication.connectToMaster(server, selector);
-			}
+			} else replication = new Replication("master");
 
 			while (true){
 				selector.select(100);
@@ -105,6 +105,17 @@ public class Main {
 
 		if ("master".equals(key.attachment())) {
 			replication.processResponse(key, command, server);
+			return;
+		}
+
+		if ("slave".equals(key.attachment())) {
+			replication.processRequest(key, command, server);
+			return;
+		}
+
+		if ("replconf".equalsIgnoreCase(command.getFirst()) && "master".equals(role)) {
+			key.attach("slave");
+			replication.processRequest(key, command, server);
 			return;
 		}
 
