@@ -12,9 +12,9 @@ public class Main {
 	private static String role = "master";
 	private static String masterHost;
 	private static int masterPort;
+	private static Replication replication;
 
 	public static void main(String[] args){
-		//Server Bootstrapping
 		int port = 6379;
 		for (int i=0; i<args.length; i++) {
 			if (args[i].equals("--port")) {
@@ -30,12 +30,13 @@ public class Main {
 				i+=2;
 			}
 		}
-		//Create server state
+
+		//Initialize server state
 		SecureRandom random = new SecureRandom();
 		byte[] bytes = new byte[20];
 		random.nextBytes(bytes);
 		String uuid = HexFormat.of().formatHex(bytes);
-		Server server = new Server(role, uuid, "0", masterHost, masterPort);
+		Server server = new Server(role, port, uuid, "0", masterHost, masterPort);
 		System.out.println("Server running on port : " + port);
 
 		try {
@@ -45,7 +46,10 @@ public class Main {
 			serverChannel.configureBlocking(false);
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-			if (role.equals("slave")) connectToMaster(server, selector);
+			if (role.equals("slave")) {
+				replication = new Replication("slave");
+				replication.connectToMaster(server, selector);
+			}
 
 			while (true){
 				selector.select(100);
@@ -71,28 +75,13 @@ public class Main {
 					} else if(key.isReadable()){
 						handleRead(key, server);
 					} else if (key.isConnectable()) {
-						finishConnectToMaster(key);
+						replication.finishConnectToMaster(key);
 					}
 				}
 			}
 		} catch (IOException e) {
 			System.out.println("IOException: " + e.getMessage());
 		}
-	}
-
-	private static void connectToMaster(Server server, Selector selector) throws IOException {
-		SocketChannel masterChannel = SocketChannel.open();
-		masterChannel.configureBlocking(false);
-		masterChannel.connect(new InetSocketAddress(server.master_host, server.master_port));
-		masterChannel.register(selector, SelectionKey.OP_CONNECT);
-	}
-
-	private static void finishConnectToMaster(SelectionKey key) throws IOException{
-		SocketChannel masterChannel = (SocketChannel) key.channel();
-		masterChannel.finishConnect();
-		String ping = "*1\r\n$4\r\nPING\r\n";
-		masterChannel.write(ByteBuffer.wrap(ping.getBytes()));
-		key.interestOps(SelectionKey.OP_READ);
 	}
 
 	private static void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
@@ -113,6 +102,11 @@ public class Main {
 
 		buffer.flip();
 		List<String> command = RespParser.parse(buffer);
+
+		if ("master".equals(key.attachment())) {
+			replication.processResponse(key, command, server);
+			return;
+		}
 
 		String response = HandleCommand.handleCommand(command, clientChannel, server);
 		if (response != null){

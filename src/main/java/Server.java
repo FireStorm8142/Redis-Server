@@ -4,6 +4,7 @@ import java.util.Queue;
 
 public class Server {
     public String role;
+    public int port;
     public String master_replid;
     public String master_repl_offset;
     public String master_host;
@@ -14,8 +15,9 @@ public class Server {
     public HashMap<String, Queue<WaitingClients>> waitingClients;
 
 
-    public Server(String role, String master_replid, String master_repl_offset, String master_host, int master_port){
+    public Server(String role, int port, String master_replid, String master_repl_offset, String master_host, int master_port){
         this.role = role;
+        this.port = port;
         this.master_replid = master_replid;
         this.master_repl_offset = master_repl_offset;
         this.master_host = master_host;
