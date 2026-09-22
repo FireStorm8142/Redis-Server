@@ -1,5 +1,5 @@
-import replication.ReplicationManager;
-import replication.ReplicationManager;
+import replication.ReplicationMaster;
+import replication.ReplicationSlave;
 import server.*;
 
 import java.io.IOException;
@@ -16,7 +16,8 @@ public class Main {
 	private static String role = "master";
 	private static String masterHost;
 	private static int masterPort;
-	private static ReplicationManager replication;
+	private static ReplicationMaster replicationMaster;
+	private static ReplicationSlave replicationSlave;
 
 	public static void main(String[] args){
 		int port = 6379;
@@ -50,10 +51,8 @@ public class Main {
 			serverChannel.configureBlocking(false);
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-			if (role.equals("slave")) {
-				replication = new ReplicationManager("slave");
-				replication.connectToMaster(server, selector);
-			} else replication = new ReplicationManager("master");
+			if (role.equals("master")) replicationMaster = new ReplicationMaster();
+			else replicationSlave = new ReplicationSlave(server, selector);
 
 			while (true){
 				selector.select(100);
@@ -79,7 +78,7 @@ public class Main {
 					} else if(key.isReadable()){
 						handleRead(key, server);
 					} else if (key.isConnectable()) {
-						replication.finishConnectToMaster(key);
+						replicationSlave.finishConnectToMaster(key);
 					}
 				}
 			}
@@ -108,18 +107,18 @@ public class Main {
 		List<String> command = RespParser.parse(buffer);
 
 		if ("master".equals(key.attachment())) {
-			replication.processResponse(key, command, server);
+			replicationSlave.processResponse(key, command, server);
 			return;
 		}
 
 		if ("slave".equals(key.attachment())) {
-			replication.processRequest(key, command, server);
+			replicationMaster.processRequest(key, command, server);
 			return;
 		}
 
 		if ("replconf".equalsIgnoreCase(command.getFirst()) && "master".equals(role)) {
 			key.attach("slave");
-			replication.processRequest(key, command, server);
+			replicationMaster.processRequest(key, command, server);
 			return;
 		}
 
