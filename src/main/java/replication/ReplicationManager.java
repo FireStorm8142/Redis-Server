@@ -1,3 +1,7 @@
+package replication;
+
+import server.Server;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -6,12 +10,12 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.List;
 
-public class Replication {
+public class ReplicationManager {
 
     private ReplicationStateSlave stateSlave;
     private ReplicationStateMaster stateMaster;
 
-    public Replication(String role) {
+    public ReplicationManager(String role) {
         if ("slave".equalsIgnoreCase(role)) stateSlave = ReplicationStateSlave.CONNECTING;
         else stateMaster = ReplicationStateMaster.WAITING_FOR_REPLCONF;
     }

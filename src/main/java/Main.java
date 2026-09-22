@@ -1,3 +1,7 @@
+import replication.ReplicationManager;
+import replication.ReplicationManager;
+import server.*;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -12,7 +16,7 @@ public class Main {
 	private static String role = "master";
 	private static String masterHost;
 	private static int masterPort;
-	private static Replication replication;
+	private static ReplicationManager replication;
 
 	public static void main(String[] args){
 		int port = 6379;
@@ -47,9 +51,9 @@ public class Main {
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
 			if (role.equals("slave")) {
-				replication = new Replication("slave");
+				replication = new ReplicationManager("slave");
 				replication.connectToMaster(server, selector);
-			} else replication = new Replication("master");
+			} else replication = new ReplicationManager("master");
 
 			while (true){
 				selector.select(100);

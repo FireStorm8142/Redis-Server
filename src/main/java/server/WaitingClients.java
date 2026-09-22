@@ -1,9 +1,11 @@
+package server;
+
 import java.nio.channels.SocketChannel;
 
 public class WaitingClients{
 
-    SocketChannel client;
-    long expiry;
+    public SocketChannel client;
+    public long expiry;
 
     public WaitingClients(SocketChannel clientChannel, double timeout){
         this.client = clientChannel;
