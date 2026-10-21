@@ -10,7 +10,6 @@ import java.util.List;
 
 public class ReplicationMaster {
 
-    /*List<ReplicaConnection> replicas = new ArrayList<>();*/
     stateMaster state;
 
     public ReplicationMaster() { state = stateMaster.WAITING_FOR_REPLCONF; }
@@ -18,6 +17,7 @@ public class ReplicationMaster {
     enum stateMaster {
         WAITING_FOR_REPLCONF,
         WAITING_FOR_CAPA,
+        WAITING_FOR_PSYNC,
         CONNECTED
     }
 
@@ -30,14 +30,24 @@ public class ReplicationMaster {
                     slaveChannel.write(ByteBuffer.wrap(ok.getBytes()));
                     state = stateMaster.WAITING_FOR_CAPA;
                 }
+                break;
 
             case WAITING_FOR_CAPA:
                 if ("replconf".equalsIgnoreCase(command.getFirst())) {
                     String ok = "+OK\r\n";
                     slaveChannel.write(ByteBuffer.wrap(ok.getBytes()));
+                    state = stateMaster.WAITING_FOR_PSYNC;
+                }
+                break;
+
+            case WAITING_FOR_PSYNC:
+                if ("psync".equalsIgnoreCase(command.getFirst())) {
+                    String response = "+FULLRESYNC "+ server.master_replid + " 0\r\n";
+                    slaveChannel.write(ByteBuffer.wrap(response.getBytes()));
                     state = stateMaster.CONNECTED;
                     System.out.println("Slave connected");
                 }
+                break;
 
             default: break;
         }

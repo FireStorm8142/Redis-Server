@@ -45,14 +45,16 @@ public class ReplicationSlave {
                     masterChannel.write(ByteBuffer.wrap(replconf.getBytes()));
                     state = stateSlave.WAITING_FOR_CAPA_OK;
                 }
+                break;
 
             case WAITING_FOR_CAPA_OK:
                 if ("ok".equalsIgnoreCase(command.getFirst())) {
                     String psync = "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n";
                     masterChannel.write(ByteBuffer.wrap(psync.getBytes()));
                     state = stateSlave.WAITING_FOR_FULLRESYNC;
-                    System.out.println("Master connected");
+                    System.out.println("Connected to Master");
                 }
+                break;
 
             default: break;
         }
