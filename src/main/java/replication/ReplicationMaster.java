@@ -44,6 +44,15 @@ public class ReplicationMaster {
                 if ("psync".equalsIgnoreCase(command.getFirst())) {
                     String response = "+FULLRESYNC "+ server.master_replid + " 0\r\n";
                     slaveChannel.write(ByteBuffer.wrap(response.getBytes()));
+                    response = "$19\r\n";
+                    slaveChannel.write(ByteBuffer.wrap(response.getBytes()));
+                    byte[] rdb = {
+                            0x52, 0x45, 0x44, 0x49, 0x53,
+                            0x30, 0x30, 0x31, 0x31,
+                            (byte) 0xFF,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0
+                    };
+                    slaveChannel.write(ByteBuffer.wrap(rdb));
                     state = stateMaster.CONNECTED;
                     System.out.println("Slave connected");
                 }
