@@ -1,6 +1,8 @@
 package replication;
 
+import RESP.RespParser;
 import server.Server;
+import Handler.HandleCommand;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -25,10 +27,11 @@ public class ReplicationSlave {
         WAITING_FOR_PONG,
         WAITING_FOR_REPLCONF_OK,
         WAITING_FOR_CAPA_OK,
-        WAITING_FOR_FULLRESYNC
+        WAITING_FOR_FULLRESYNC,
+        REPLICATING
     }
 
-    public void processResponse(SelectionKey key, List<String> command, Server server) throws IOException {
+    public void processResponse(SelectionKey key, List<String> command, Server server, ByteBuffer buffer) throws IOException {
         SocketChannel masterChannel = (SocketChannel) key.channel();
         switch (state) {
             case WAITING_FOR_PONG:
@@ -52,10 +55,21 @@ public class ReplicationSlave {
                     String psync = "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n";
                     masterChannel.write(ByteBuffer.wrap(psync.getBytes()));
                     state = stateSlave.WAITING_FOR_FULLRESYNC;
-                    System.out.println("Connected to Master");
                 }
                 break;
 
+            case WAITING_FOR_FULLRESYNC:
+                buffer.get();
+                int rdbLength = RespParser.readArg(buffer);
+                if (buffer.remaining() < rdbLength) throw new RuntimeException("Incomplete RDB payload");
+                buffer.position(buffer.position() + rdbLength);
+                state = stateSlave.REPLICATING;
+                System.out.println("Connected to Master");
+                break;
+
+            case REPLICATING:
+                HandleCommand.handleCommand(command, masterChannel, server, null);
+                break;
             default: break;
         }
     }
@@ -75,5 +89,4 @@ public class ReplicationSlave {
         key.interestOps(SelectionKey.OP_READ);
         state = stateSlave.WAITING_FOR_PONG;
     }
-
 }

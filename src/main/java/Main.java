@@ -1,3 +1,6 @@
+import Handler.HandleCommand;
+import RESP.RespParser;
+import replication.Replica;
 import replication.ReplicationMaster;
 import replication.ReplicationSlave;
 import server.*;
@@ -30,9 +33,9 @@ public class Main {
 			}
 			else if (args[i].equals("--replicaof")) {
 				role = "slave";
-				masterHost = args[i+1];
-				masterPort = Integer.parseInt(args[i+2]);
-				i+=2;
+				masterHost = args[i+1].split(" ")[0];
+				masterPort = Integer.parseInt(args[i+1].split(" ")[1]);
+				i++;
 			}
 		}
 
@@ -51,7 +54,7 @@ public class Main {
 			serverChannel.configureBlocking(false);
 			serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-			if (role.equals("master")) replicationMaster = new ReplicationMaster();
+			if (role.equals("master")) replicationMaster = new ReplicationMaster(server);
 			else replicationSlave = new ReplicationSlave(server, selector);
 
 			while (true){
@@ -104,27 +107,29 @@ public class Main {
 		}
 
 		buffer.flip();
-		List<String> command = RespParser.parse(buffer);
+		while (buffer.hasRemaining()) {
+			List<String> command = RespParser.parse(buffer);
+			if ("master".equals(key.attachment())) {
+				replicationSlave.processResponse(key, command, server, buffer);
+				continue;
+			}
 
-		if ("master".equals(key.attachment())) {
-			replicationSlave.processResponse(key, command, server);
-			return;
-		}
+			if (key.attachment() instanceof Replica) {
+				replicationMaster.processRequest(key, command);
+				return;
+			}
 
-		if ("slave".equals(key.attachment())) {
-			replicationMaster.processRequest(key, command, server);
-			return;
-		}
+			if ("replconf".equalsIgnoreCase(command.getFirst()) && "master".equals(role)) {
+				Replica replica = new Replica((SocketChannel) key.channel());
+				key.attach(replica);
+				replicationMaster.processRequest(key, command);
+				return;
+			}
 
-		if ("replconf".equalsIgnoreCase(command.getFirst()) && "master".equals(role)) {
-			key.attach("slave");
-			replicationMaster.processRequest(key, command, server);
-			return;
-		}
-
-		String response = HandleCommand.handleCommand(command, clientChannel, server);
-		if (response != null){
-			clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+			String response = HandleCommand.handleCommand(command, clientChannel, server, replicationMaster);
+			if (response != null) {
+				clientChannel.write(ByteBuffer.wrap(response.getBytes()));
+			}
 		}
 	}
 }

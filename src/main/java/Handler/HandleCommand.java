@@ -1,4 +1,7 @@
+package Handler;
+
 import server.*;
+import replication.ReplicationMaster;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -7,10 +10,11 @@ import java.util.*;
 
 public class HandleCommand {
 
-    public static String handleCommand(List<String> command, SocketChannel clientChannel, Server server) throws IOException {
+    public static String handleCommand(List<String> command, SocketChannel clientChannel, Server server, ReplicationMaster replicationMaster) throws IOException {
         String cmd = command.getFirst().toUpperCase();
         String response = null;
         StringBuilder sb;
+        boolean master = replicationMaster != null;
         switch(cmd) {
             //temporary handler for redis-cli, it expects the server send a bulk string,
             //else the cli sits in a loop doing nothing.
@@ -51,6 +55,7 @@ public class HandleCommand {
                 }
                 server.getStorage().put(command.get(1), command.get(2));
                 response = "+OK\r\n";
+                if (master) replicationMaster.propagateCommand(command);
                 break;
 
             case "RPUSH":
@@ -157,7 +162,7 @@ public class HandleCommand {
                 break;
 
             case "BLPOP":
-                List<String> list5  = server.getListStorage().getOrDefault(command.get(1), null);
+                List<String> list5 = server.getListStorage().getOrDefault(command.get(1), null);
 
                 if (list5 == null || list5.isEmpty()) {
                     Queue<WaitingClients> queue1 = server.getWaitingClients().get(command.get(1));
