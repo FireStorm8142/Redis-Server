@@ -108,21 +108,21 @@ public class Main {
 
 		buffer.flip();
 		while (buffer.hasRemaining()) {
-			List<String> command = RespParser.parse(buffer);
 			if ("master".equals(key.attachment())) {
-				replicationSlave.processResponse(key, command, server, buffer);
+				replicationSlave.processResponse(key, server, buffer);
 				continue;
 			}
 
 			if (key.attachment() instanceof Replica) {
-				replicationMaster.processRequest(key, command);
+				replicationMaster.processRequest(key, buffer);
 				return;
 			}
 
+			List<String> command = RespParser.parse(buffer);
 			if ("replconf".equalsIgnoreCase(command.getFirst()) && "master".equals(role)) {
 				Replica replica = new Replica((SocketChannel) key.channel());
 				key.attach(replica);
-				replicationMaster.processRequest(key, command);
+				replicationMaster.processRequest(key, buffer);
 				return;
 			}
 

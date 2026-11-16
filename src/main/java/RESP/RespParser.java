@@ -15,6 +15,7 @@ public class RespParser {
             result.add(readSimple(buffer));
             return result;
         }
+
         if (prefix != '*') throw new RuntimeException("Invalid RESP: * or + expected");
 
         int arg = readArg(buffer);
@@ -31,6 +32,22 @@ public class RespParser {
             buffer.get();
         }
         return result;
+    }
+
+    public static int parseRDBHeader(ByteBuffer buffer) {
+        if (buffer.get() != '$') throw new RuntimeException("Expected $");
+        StringBuilder sb = new StringBuilder();
+
+        while (true) {
+            char c = (char) buffer.get();
+            if (c=='\r'){
+                buffer.get();
+                break;
+            }
+            sb.append(c);
+        }
+
+        return Integer.parseInt(sb.toString());
     }
 
     public static int readArg(ByteBuffer buffer){

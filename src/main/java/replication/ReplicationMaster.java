@@ -1,6 +1,7 @@
 package replication;
 
 import RESP.RespEncoder;
+import RESP.RespParser;
 import server.Server;
 
 import java.io.IOException;
@@ -19,30 +20,29 @@ public class ReplicationMaster {
         this.server = server;
     }
 
-    public void processRequest(SelectionKey key, List<String> command) throws IOException {
+    public void processRequest(SelectionKey key, ByteBuffer buffer) throws IOException {
         Replica replica = (Replica) key.attachment();
+        List<String> command;
         switch(replica.getState()) {
             case WAITING_FOR_REPLCONF:
-                if ("replconf".equalsIgnoreCase(command.getFirst())) {
-                    String ok = "+OK\r\n";
-                    replica.getChannel().write(ByteBuffer.wrap(ok.getBytes()));
-                    replica.setState(Replica.stateMaster.WAITING_FOR_CAPA);
-                }
+                String ok = "+OK\r\n";
+                replica.getChannel().write(ByteBuffer.wrap(ok.getBytes()));
+                replica.setState(Replica.stateMaster.WAITING_FOR_CAPA);
                 break;
 
             case WAITING_FOR_CAPA:
+                command = RespParser.parse(buffer);
                 if ("replconf".equalsIgnoreCase(command.getFirst())) {
-                    String ok = "+OK\r\n";
-                    replica.getChannel().write(ByteBuffer.wrap(ok.getBytes()));
+                    String ok2 = "+OK\r\n";
+                    replica.getChannel().write(ByteBuffer.wrap(ok2.getBytes()));
                     replica.setState(Replica.stateMaster.WAITING_FOR_PSYNC);
                 }
                 break;
 
             case WAITING_FOR_PSYNC:
+                command = RespParser.parse(buffer);
                 if ("psync".equalsIgnoreCase(command.getFirst())) {
                     String response = "+FULLRESYNC "+ server.master_replid + " 0\r\n";
-                    replica.getChannel().write(ByteBuffer.wrap(response.getBytes()));
-                    response = "$19\r\n";
                     replica.getChannel().write(ByteBuffer.wrap(response.getBytes()));
                     byte[] rdb = {
                             0x52, 0x45, 0x44, 0x49, 0x53,
@@ -50,6 +50,8 @@ public class ReplicationMaster {
                             (byte) 0xFF,
                             0, 0, 0, 0, 0, 0, 0, 0, 0
                     };
+                    response = "$" + rdb.length + "\r\n";
+                    replica.getChannel().write(ByteBuffer.wrap(response.getBytes()));
                     replica.getChannel().write(ByteBuffer.wrap(rdb));
                     replica.setState(Replica.stateMaster.CONNECTED);
                     replicas.add(replica);
